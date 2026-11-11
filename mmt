@@ -1,0 +1,775 @@
+
+import sqlite3
+from datetime import datetime
+
+from kivy.app import App
+from kivy.metrics import dp, sp
+from kivy.core.window import Window
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.label import Label
+from kivy.uix.textinput import TextInput
+from kivy.uix.button import Button
+from kivy.uix.scrollview import ScrollView
+from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.uix.popup import Popup
+
+
+Window.clearcolor = (0.035, 0.06, 0.11, 1)
+
+
+BG = (0.035, 0.06, 0.11, 1)
+PANEL = (0.075, 0.11, 0.18, 1)
+CARD = (0.09, 0.15, 0.23, 1)
+BLUE = (0.10, 0.48, 0.90, 1)
+LIGHT_BLUE = (0.25, 0.68, 1, 1)
+WHITE = (0.93, 0.96, 1, 1)
+MUTED = (0.58, 0.68, 0.80, 1)
+GREEN = (0.10, 0.62, 0.42, 1)
+RED = (0.72, 0.20, 0.24, 1)
+
+
+def make_label(text, size=14, color=WHITE, height=None):
+    return Label(
+        text=text,
+        font_size=sp(size),
+        color=color,
+        size_hint_y=None,
+        height=dp(height or 30),
+        halign="left",
+        valign="middle"
+    )
+
+
+def make_button(text, color=BLUE, height=48):
+    btn = Button(
+        text=text,
+        size_hint_y=None,
+        height=dp(height),
+        background_normal="",
+        background_color=color,
+        color=WHITE,
+        font_size=sp(14),
+        bold=True
+    )
+    return btn
+
+
+def make_input(hint):
+    return TextInput(
+        hint_text=hint,
+        multiline=False,
+        size_hint_y=None,
+        height=dp(48),
+        padding=[dp(12), dp(12)],
+        background_normal="",
+        background_active="",
+        background_color=PANEL,
+        foreground_color=WHITE,
+        hint_text_color=MUTED,
+        cursor_color=LIGHT_BLUE,
+        font_size=sp(14)
+    )
+
+
+class PEpleApp(App):
+
+    def build(self):
+        self.title = "PEple"
+
+        self.db_path = self.user_data_dir + "/people.db"
+        self.db = sqlite3.connect(self.db_path)
+        self.db.execute("""
+            CREATE TABLE IF NOT EXISTS people (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                card_number TEXT UNIQUE NOT NULL,
+                age INTEGER NOT NULL,
+                birth_date TEXT NOT NULL,
+                center TEXT NOT NULL,
+                governorate TEXT NOT NULL,
+                village TEXT NOT NULL
+            )
+        """)
+        self.db.commit()
+
+        self.inputs = {}
+
+        self.manager = ScreenManager()
+
+        self.home_screen = Screen(name="home")
+        self.records_screen = Screen(name="records")
+
+        self.home_screen.add_widget(self.build_home())
+        self.records_screen.add_widget(self.build_records())
+
+        self.manager.add_widget(self.home_screen)
+        self.manager.add_widget(self.records_screen)
+
+        return self.manager
+
+    # ---------------- HOME SCREEN ----------------
+
+    def build_home(self):
+        main = BoxLayout(
+            orientation="vertical",
+            padding=dp(16),
+            spacing=dp(12)
+        )
+
+        header = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(65)
+        )
+
+        title_box = BoxLayout(
+            orientation="vertical",
+            spacing=dp(2)
+        )
+
+        title_box.add_widget(Label(
+            text="[b]PEple[/b]",
+            markup=True,
+            font_size=sp(27),
+            color=WHITE,
+            halign="left"
+        ))
+
+        title_box.add_widget(Label(
+            text="PERSONAL RECORDS SYSTEM",
+            font_size=sp(10),
+            color=LIGHT_BLUE,
+            halign="left"
+        ))
+
+        header.add_widget(title_box)
+
+        header.add_widget(Label(
+            text="● OFFLINE",
+            font_size=sp(11),
+            color=GREEN,
+            size_hint_x=None,
+            width=dp(85)
+        ))
+
+        main.add_widget(header)
+
+        main.add_widget(make_label(
+            "NEW PERSONAL RECORD",
+            17,
+            LIGHT_BLUE,
+            35
+        ))
+
+        scroll = ScrollView()
+
+        content = BoxLayout(
+            orientation="vertical",
+            spacing=dp(12),
+            size_hint_y=None
+        )
+        content.bind(minimum_height=content.setter("height"))
+
+        grid = GridLayout(
+            cols=2,
+            spacing=dp(10),
+            size_hint_y=None
+        )
+        grid.bind(minimum_height=grid.setter("height"))
+
+        self.add_field(grid, "name", "● Full Name", "Enter full name")
+        self.add_field(grid, "card", "▣ National ID", "Enter ID number")
+        self.add_field(grid, "birth", "◷ Birth Date", "DD/MM/YYYY")
+        self.add_field(grid, "age", "# Age", "Enter age")
+        self.add_field(grid, "center", "⌖ Center", "Enter center")
+        self.add_field(grid, "governorate", "▤ Governorate", "Enter governorate")
+
+        content.add_widget(grid)
+
+        self.add_field(
+            content,
+            "village",
+            "⌂ Village",
+            "Enter village"
+        )
+
+        scroll.add_widget(content)
+        main.add_widget(scroll)
+
+        self.status_label = Label(
+            text="",
+            color=GREEN,
+            font_size=sp(12),
+            size_hint_y=None,
+            height=dp(25)
+        )
+        main.add_widget(self.status_label)
+
+        save_btn = make_button("SAVE RECORD", GREEN)
+        save_btn.bind(on_release=self.save_record)
+        main.add_widget(save_btn)
+
+        view_btn = make_button("VIEW RECORDS", BLUE)
+        view_btn.bind(on_release=self.open_records)
+        main.add_widget(view_btn)
+
+        return main
+
+    def add_field(self, parent, key, label_text, hint):
+        box = BoxLayout(
+            orientation="vertical",
+            spacing=dp(5),
+            size_hint_y=None,
+            height=dp(82)
+        )
+
+        box.add_widget(make_label(label_text, 12, LIGHT_BLUE, 25))
+
+        field = make_input(hint)
+        box.add_widget(field)
+
+        parent.add_widget(box)
+        self.inputs[key] = field
+
+    # ---------------- SAVE RECORD ----------------
+
+    def save_record(self, instance):
+        values = {
+            "name": self.inputs["name"].text.strip(),
+            "card": self.inputs["card"].text.strip(),
+            "birth": self.inputs["birth"].text.strip(),
+            "age": self.inputs["age"].text.strip(),
+            "center": self.inputs["center"].text.strip(),
+            "governorate": self.inputs["governorate"].text.strip(),
+            "village": self.inputs["village"].text.strip()
+        }
+
+        if not all(values.values()):
+            self.status_label.text = "Please complete all fields."
+            self.status_label.color = (1, 0.65, 0.25, 1)
+            return
+
+        try:
+            age = int(values["age"])
+
+            if age < 0 or age > 120:
+                raise ValueError
+
+            datetime.strptime(values["birth"], "%d/%m/%Y")
+
+            self.db.execute("""
+                INSERT INTO people
+                (name, card_number, age, birth_date,
+                 center, governorate, village)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                values["name"],
+                values["card"],
+                age,
+                values["birth"],
+                values["center"],
+                values["governorate"],
+                values["village"]
+            ))
+
+            self.db.commit()
+
+            for field in self.inputs.values():
+                field.text = ""
+
+            self.status_label.text = "Record saved successfully!"
+            self.status_label.color = GREEN
+
+        except ValueError:
+            self.status_label.text = "Check age and birth date."
+            self.status_label.color = RED
+
+        except sqlite3.IntegrityError:
+            self.status_label.text = "This National ID already exists."
+            self.status_label.color = RED
+
+        except sqlite3.Error as error:
+            self.status_label.text = "Database error: " + str(error)
+            self.status_label.color = RED
+
+    # ---------------- RECORDS SCREEN ----------------
+
+    def build_records(self):
+        main = BoxLayout(
+            orientation="vertical",
+            padding=dp(16),
+            spacing=dp(12)
+        )
+
+        header = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(55)
+        )
+
+        header.add_widget(Label(
+            text="[b]PEple[/b]",
+            markup=True,
+            font_size=sp(25),
+            color=WHITE,
+            halign="left"
+        ))
+
+        back_btn = make_button("BACK", PANEL, 42)
+        back_btn.size_hint_x = None
+        back_btn.width = dp(85)
+        back_btn.bind(on_release=self.go_home)
+
+        header.add_widget(back_btn)
+        main.add_widget(header)
+
+        main.add_widget(make_label(
+            "RECORDS DATABASE",
+            18,
+            LIGHT_BLUE,
+            35
+        ))
+
+        self.records_count = make_label(
+            "SAVED RECORDS: 0",
+            12,
+            MUTED,
+            25
+        )
+        main.add_widget(self.records_count)
+
+        self.search_input = make_input(
+            "Search by name or National ID..."
+        )
+        self.search_input.bind(text=self.refresh_records)
+        main.add_widget(self.search_input)
+
+        scroll = ScrollView()
+
+        self.records_list = GridLayout(
+            cols=1,
+            spacing=dp(10),
+            size_hint_y=None
+        )
+        self.records_list.bind(
+            minimum_height=self.records_list.setter("height")
+        )
+
+        scroll.add_widget(self.records_list)
+        main.add_widget(scroll)
+
+        refresh_btn = make_button("REFRESH RECORDS", BLUE)
+        refresh_btn.bind(
+            on_release=lambda x: self.refresh_records()
+        )
+        main.add_widget(refresh_btn)
+
+        return main
+
+    def open_records(self, instance):
+        self.manager.current = "records"
+        self.search_input.text = ""
+        self.refresh_records()
+
+    def go_home(self, instance):
+        self.manager.current = "home"
+
+    def refresh_records(self, *args):
+        query = self.search_input.text.strip()
+
+        self.records_list.clear_widgets()
+
+        try:
+            rows = self.db.execute("""
+                SELECT id, name, card_number, age,
+                       birth_date, center, governorate, village
+                FROM people
+                WHERE name LIKE ? OR card_number LIKE ?
+                ORDER BY id DESC
+            """, (
+                "%" + query + "%",
+                "%" + query + "%"
+            )).fetchall()
+
+            self.records_count.text = (
+                "SAVED RECORDS: " + str(len(rows))
+            )
+
+            if not rows:
+                self.records_list.add_widget(make_label(
+                    "NO RECORDS FOUND",
+                    16,
+                    MUTED,
+                    70
+                ))
+                return
+
+            for row in rows:
+                self.add_record_card(row)
+
+        except sqlite3.Error as error:
+            self.records_list.add_widget(make_label(
+                "Database error: " + str(error),
+                12,
+                RED,
+                50
+            ))
+
+    def add_record_card(self, record):
+        record_id = record[0]
+        name = record[1]
+        card_number = record[2]
+        age = record[3]
+        center = record[5]
+        governorate = record[6]
+
+        card = BoxLayout(
+            orientation="vertical",
+            padding=dp(12),
+            spacing=dp(7),
+            size_hint_y=None,
+            height=dp(145)
+        )
+
+        card.canvas.before.clear()
+
+        from kivy.graphics import Color, RoundedRectangle
+
+        with card.canvas.before:
+            Color(*CARD)
+            card.bg = RoundedRectangle(
+                pos=card.pos,
+                size=card.size,
+                radius=[dp(12)]
+            )
+
+        card.bind(
+            pos=lambda obj, value: setattr(obj.bg, "pos", value),
+            size=lambda obj, value: setattr(obj.bg, "size", value)
+        )
+
+        card.add_widget(make_label(
+            name,
+            16,
+            WHITE,
+            27
+        ))
+
+        card.add_widget(make_label(
+            "ID: " + card_number,
+            12,
+            LIGHT_BLUE,
+            22
+        ))
+
+        card.add_widget(make_label(
+            "Age: " + str(age) +
+            "     Center: " + center,
+            11,
+            MUTED,
+            22
+        ))
+
+        card.add_widget(make_label(
+            "Governorate: " + governorate,
+            11,
+            MUTED,
+            22
+        ))
+
+        view_btn = make_button("VIEW DETAILS", BLUE, 38)
+        view_btn.bind(
+            on_release=lambda btn, r=record: self.show_details(r)
+        )
+        card.add_widget(view_btn)
+
+        self.records_list.add_widget(card)
+
+    # ---------------- DETAILS ----------------
+
+    def show_details(self, record):
+        popup_content = BoxLayout(
+            orientation="vertical",
+            padding=dp(14),
+            spacing=dp(8)
+        )
+
+        popup_content.add_widget(make_label(
+            "PERSONAL RECORD DETAILS",
+            16,
+            LIGHT_BLUE,
+            35
+        ))
+
+        fields = [
+            ("Full Name", record[1]),
+            ("National ID", record[2]),
+            ("Age", str(record[3])),
+            ("Birth Date", record[4]),
+            ("Center", record[5]),
+            ("Governorate", record[6]),
+            ("Village", record[7])
+        ]
+
+        for title, value in fields:
+            popup_content.add_widget(make_label(
+                title + ": " + str(value),
+                12,
+                WHITE,
+                30
+            ))
+
+        buttons = BoxLayout(
+            size_hint_y=None,
+            height=dp(45),
+            spacing=dp(8)
+        )
+
+        edit_btn = make_button("EDIT", BLUE, 42)
+        delete_btn = make_button("DELETE", RED, 42)
+
+        buttons.add_widget(edit_btn)
+        buttons.add_widget(delete_btn)
+
+        popup_content.add_widget(buttons)
+
+        close_btn = make_button("CLOSE", PANEL, 40)
+        popup_content.add_widget(close_btn)
+
+        popup = Popup(
+            title="PEple",
+            content=popup_content,
+            size_hint=(0.92, 0.85),
+            background_color=BG
+        )
+
+        edit_btn.bind(
+            on_release=lambda x: (
+                popup.dismiss(),
+                self.edit_record(record)
+            )
+        )
+
+        delete_btn.bind(
+            on_release=lambda x: (
+                popup.dismiss(),
+                self.confirm_delete(record)
+            )
+        )
+
+        close_btn.bind(on_release=popup.dismiss)
+
+        popup.open()
+
+    # ---------------- EDIT RECORD ----------------
+
+    def edit_record(self, record):
+        content = BoxLayout(
+            orientation="vertical",
+            padding=dp(12),
+            spacing=dp(8)
+        )
+
+        scroll = ScrollView()
+
+        form = BoxLayout(
+            orientation="vertical",
+            spacing=dp(8),
+            size_hint_y=None
+        )
+        form.bind(minimum_height=form.setter("height"))
+
+        keys = [
+            ("name", "Full Name", record[1]),
+            ("card", "National ID", record[2]),
+            ("age", "Age", str(record[3])),
+            ("birth", "Birth Date", record[4]),
+            ("center", "Center", record[5]),
+            ("governorate", "Governorate", record[6]),
+            ("village", "Village", record[7])
+        ]
+
+        edit_inputs = {}
+
+        for key, label_text, old_value in keys:
+            form.add_widget(make_label(
+                label_text,
+                12,
+                LIGHT_BLUE,
+                23
+            ))
+
+            field = make_input(label_text)
+            field.text = str(old_value)
+            form.add_widget(field)
+            edit_inputs[key] = field
+
+        scroll.add_widget(form)
+        content.add_widget(scroll)
+
+        save_btn = make_button("SAVE CHANGES", GREEN)
+        content.add_widget(save_btn)
+
+        popup = Popup(
+            title="EDIT RECORD",
+            content=content,
+            size_hint=(0.92, 0.88),
+            background_color=BG
+        )
+
+        save_btn.bind(
+            on_release=lambda x: self.update_record(
+                record[0], edit_inputs, popup
+            )
+        )
+
+        popup.open()
+
+    def update_record(self, record_id, fields, popup):
+        values = {
+            key: field.text.strip()
+            for key, field in fields.items()
+        }
+
+        if not all(values.values()):
+            return
+
+        try:
+            age = int(values["age"])
+
+            if age < 0 or age > 120:
+                raise ValueError
+
+            datetime.strptime(values["birth"], "%d/%m/%Y")
+
+            self.db.execute("""
+                UPDATE people
+                SET name=?, card_number=?, age=?, birth_date=?,
+                    center=?, governorate=?, village=?
+                WHERE id=?
+            """, (
+                values["name"],
+                values["card"],
+                age,
+                values["birth"],
+                values["center"],
+                values["governorate"],
+                values["village"],
+                record_id
+            ))
+
+            self.db.commit()
+            popup.dismiss()
+            self.refresh_records()
+
+        except ValueError:
+            self.message_popup(
+                "Please check age and birth date."
+            )
+
+        except sqlite3.IntegrityError:
+            self.message_popup(
+                "This National ID already exists."
+            )
+
+        except sqlite3.Error as error:
+            self.message_popup(str(error))
+
+    # ---------------- DELETE RECORD ----------------
+
+    def confirm_delete(self, record):
+        content = BoxLayout(
+            orientation="vertical",
+            padding=dp(15),
+            spacing=dp(12)
+        )
+
+        content.add_widget(make_label(
+            "Are you sure you want to delete this record?",
+            13,
+            WHITE,
+            55
+        ))
+
+        buttons = BoxLayout(
+            size_hint_y=None,
+            height=dp(45),
+            spacing=dp(10)
+        )
+
+        cancel_btn = make_button("CANCEL", PANEL, 42)
+        delete_btn = make_button("CONFIRM DELETE", RED, 42)
+
+        buttons.add_widget(cancel_btn)
+        buttons.add_widget(delete_btn)
+
+        content.add_widget(buttons)
+
+        popup = Popup(
+            title="CONFIRM DELETE",
+            content=content,
+            size_hint=(0.9, 0.35),
+            background_color=BG
+        )
+
+        cancel_btn.bind(on_release=popup.dismiss)
+
+        delete_btn.bind(
+            on_release=lambda x: self.delete_record(
+                record[0], popup
+            )
+        )
+
+        popup.open()
+
+    def delete_record(self, record_id, popup):
+        try:
+            self.db.execute(
+                "DELETE FROM people WHERE id=?",
+                (record_id,)
+            )
+            self.db.commit()
+
+            popup.dismiss()
+            self.refresh_records()
+
+        except sqlite3.Error as error:
+            self.message_popup(str(error))
+
+    # ---------------- MESSAGE ----------------
+
+    def message_popup(self, message):
+        content = BoxLayout(
+            orientation="vertical",
+            padding=dp(12),
+            spacing=dp(10)
+        )
+
+        content.add_widget(make_label(
+            message,
+            13,
+            WHITE,
+            60
+        ))
+
+        close_btn = make_button("OK", BLUE)
+        content.add_widget(close_btn)
+
+        popup = Popup(
+            title="PEple",
+            content=content,
+            size_hint=(0.85, 0.3),
+            background_color=BG
+        )
+
+        close_btn.bind(on_release=popup.dismiss)
+        popup.open()
+
+    def on_stop(self):
+        if hasattr(self, "db"):
+            self.db.close()
+
+
+if __name__ == "__main__":
+    PEpleApp().run()
